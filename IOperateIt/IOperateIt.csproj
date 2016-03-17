@@ -56,10 +56,14 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Configs\MissionTypes.cs" />
     <Compile Include="Manager\EventBusManager.cs" />
     <Compile Include="IOperateItOptions.cs" />
+    <Compile Include="Manager\MissionManager.cs" />
     <Compile Include="Manager\OptionsManager.cs" />
     <Compile Include="Manager\VehicleHolder.cs" />
+    <Compile Include="Manager\MissionDispatch.cs" />
+    <Compile Include="MissionMessage.cs" />
     <Compile Include="Tools\RoadSelectTool.cs" />
     <Compile Include="IOperateItLoading.cs" />
     <Compile Include="IOperateItMod.cs" />

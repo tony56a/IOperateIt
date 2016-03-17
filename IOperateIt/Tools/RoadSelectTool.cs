@@ -12,8 +12,22 @@ namespace IOperateIt.Tools
 {
     class RoadSelectTool: DefaultTool
     {
+
+        Texture2D texture;
         protected override void Awake()
         {
+            // Create a new 2x2 texture ARGB32 (32 bit with alpha) and no mipmaps
+            texture = new Texture2D(2, 2, TextureFormat.ARGB32, false);
+
+            // set the pixel values
+            texture.SetPixel(0, 0, new Color(0f, 1.0f, 0f, 0.15f));
+            texture.SetPixel(1, 0, new Color(0f, 1.0f, 0f, 0.15f));
+            texture.SetPixel(0, 1, new Color(0f, 1.0f, 0f, 0.15f));
+            texture.SetPixel(1, 1, new Color(0f, 1.0f, 0f, 0.15f));
+
+            // Apply all SetPixel calls
+            texture.Apply();
+
             base.Awake();
         }
 
@@ -48,24 +62,24 @@ namespace IOperateIt.Tools
                         {
                             if (Event.current.type == EventType.MouseDown /*&& Event.current.button == (int)UIMouseButton.Left*/)
                             {
-                                Vector3 pos1;
-                                Vector3 pos2;
-                                Vector3 rot1;
-                                Vector3 rot2;
-                                bool smooth1;
-                                bool smooth2;
-
-                                netSegment.CalculateCorner(netSegmentId, true, true, true, out pos1, out rot1, out smooth1);
-                                netSegment.CalculateCorner(netSegmentId, true, false, true, out pos2, out rot2, out smooth2);
-                                LoggerUtils.Log(string.Format("pos:{0},rot:{1}", pos1, rot1));
-                                LoggerUtils.Log(string.Format("pos:{0},rot:{1}", pos2, rot2));
-                                Vector3 diff = pos2 - pos1;
-                                float angle = Mathf.Atan2(diff.y, diff.x) * Mathf.Rad2Deg;
-                                LoggerUtils.Log(string.Format("angle:{0}", angle));
-
                                 ShowToolInfo(false, null, new Vector3());
-                                VehicleInfo info = VehicleHolder.getInstance().getVehicleInfo();
-                                VehicleHolder.getInstance().setActive(netSegment.m_middlePosition,Vector3.zero);
+                                GameObject cylinder = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                                cylinder.transform.position = netSegment.m_middlePosition;
+                                cylinder.transform.localScale = new Vector3(50, 200, 50);
+                                Material material = new Material(Shader.Find("Unlit/Transparent"));
+                                material.SetInt("_Mode", 3);
+                                material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+                                material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                                material.SetInt("_ZWrite", 0);
+                                material.DisableKeyword("_ALPHATEST_ON");
+                                material.DisableKeyword("_ALPHABLEND_ON");
+                                material.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+                                material.renderQueue = 3000;
+                                material.mainTexture =texture;
+                                cylinder.GetComponent<Renderer>().sharedMaterial = material;
+
+                                //VehicleInfo info = VehicleHolder.getInstance().getVehicleInfo();
+                                //VehicleHolder.getInstance().setActive(netSegment.m_middlePosition,Vector3.zero);
 
                                 //unset self as tool
                                 ToolsModifierControl.toolController.CurrentTool = ToolsModifierControl.GetTool<DefaultTool>();

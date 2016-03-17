@@ -298,6 +298,11 @@ namespace IOperateIt
 
         }
 
+        private void updateRoadColliders()
+        {
+
+        }
+
         private void calculateSlope()
         {
             Vector3 oldEuler = transform.rotation.eulerAngles;
@@ -324,6 +329,7 @@ namespace IOperateIt
 
                 updateBuildingColliders();
                 updateVehicleColliders();
+                updateRoadColliders();
 
                 Segment3 ray = new Segment3(transform.position + new Vector3(0f, 1.5f, 0f), transform.position + new Vector3(0f, -100f, 0f));
 
@@ -376,7 +382,7 @@ namespace IOperateIt
                     this.vehicleRigidBody.AddForce(-brakeVelocity);
                 }
 
-                calculateSlope();
+                //calculateSlope();
 
                 Vector3 forward;
                 Vector3 up;
