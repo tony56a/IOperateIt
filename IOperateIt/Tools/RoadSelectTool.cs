@@ -63,7 +63,8 @@ namespace IOperateIt.Tools
                             if (Event.current.type == EventType.MouseDown /*&& Event.current.button == (int)UIMouseButton.Left*/)
                             {
                                 ShowToolInfo(false, null, new Vector3());
-                                GameObject cylinder = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                                /*GameObject cylinder = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                                cylinder.GetComponent<Collider>().enabled = false;
                                 cylinder.transform.position = netSegment.m_middlePosition;
                                 cylinder.transform.localScale = new Vector3(50, 200, 50);
                                 Material material = new Material(Shader.Find("Unlit/Transparent"));
@@ -76,10 +77,10 @@ namespace IOperateIt.Tools
                                 material.EnableKeyword("_ALPHAPREMULTIPLY_ON");
                                 material.renderQueue = 3000;
                                 material.mainTexture =texture;
-                                cylinder.GetComponent<Renderer>().sharedMaterial = material;
+                                cylinder.GetComponent<Renderer>().sharedMaterial = material;*/
 
-                                //VehicleInfo info = VehicleHolder.getInstance().getVehicleInfo();
-                                //VehicleHolder.getInstance().setActive(netSegment.m_middlePosition,Vector3.zero);
+                                VehicleInfo info = VehicleHolder.getInstance().getVehicleInfo();
+                                VehicleHolder.getInstance().setActive(netSegment.m_middlePosition,Vector3.zero);
 
                                 //unset self as tool
                                 ToolsModifierControl.toolController.CurrentTool = ToolsModifierControl.GetTool<DefaultTool>();

@@ -83,11 +83,11 @@ namespace IOperateIt.Manager
 
         public Mission generateMission()
         {
-            Mission returnValue = new Mission();
+            //Mission returnValue = new Mission();
             List<ItemClass.Service> possibleServiceTypes = new List<ItemClass.Service> { ItemClass.Service.Residential, ItemClass.Service.Commercial, ItemClass.Service.Industrial, ItemClass.Service.Office };
             ItemClass.Service serviceType = possibleServiceTypes[UnityEngine.Random.Range(0, possibleServiceTypes.Count)];
-            ushort startBuilding = GetRandomBuilding(serviceType);
-            return 
+            //ushort startBuilding = GetRandomBuilding(serviceType);
+            return null;
         }
 
     }

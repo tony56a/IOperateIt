@@ -8,6 +8,7 @@ using System.Text;
 using IOperateIt.Manager;
 using IOperateIt.Utils;
 using UnityEngine;
+using IOperateIt.UIUtils;
 
 namespace IOperateIt
 {
@@ -29,6 +30,8 @@ namespace IOperateIt
     {
         private readonly int NUM_BUILDING_COLLIDERS = 360 / 10;
         private readonly int NUM_VEHICLE_COLLIDERS = 160;
+        private readonly int NUM_PARKED_VEHICLE_COLLIDERS = 80;
+
         private readonly float SCAN_DISTANCE = 500f;
 
         private bool active;
@@ -38,11 +41,15 @@ namespace IOperateIt
         TerrainManager terrainManager;
         OptionsManager optionsManager;
         VehicleManager vehicleManager;
+        AudioManager audioManager;
+        AudioManager.ListenerInfo listenerInfo;
 
         private Rigidbody vehicleRigidBody;
         private Mesh vehicleMesh;
         private BoxCollider vehicleCollider;
         private List<Light> mLights;
+        private List<SoundEffect> audioEffects = new List<SoundEffect>();
+        private List<SoundEffect> togglableAudioEffects = new List<SoundEffect>();
 
         private float terrainHeight;
         private Vector3 prevPosition;
@@ -55,8 +62,10 @@ namespace IOperateIt
 
         private ColliderContainer[] mBuildingColliders;
         private ColliderContainer[] mVehicleColliders;
+        private ColliderContainer[] mParkedVehicleColliders;
 
 
+        InstanceID id = new InstanceID();
         void Awake()
         {
             // Get manager instances
@@ -65,6 +74,8 @@ namespace IOperateIt
             buildingManager = Singleton<BuildingManager>.instance;
             optionsManager = OptionsManager.Instance();
             vehicleManager = Singleton<VehicleManager>.instance;
+            audioManager = Singleton<AudioManager>.instance;
+            listenerInfo = ReflectionUtils.ReadPrivate<AudioManager, AudioManager.ListenerInfo>(audioManager, "m_listenerInfo");
 
             // Get controller for camera
             cameraController = GameObject.FindObjectOfType<CameraController>();
@@ -76,6 +87,8 @@ namespace IOperateIt
             // Set up colliders for nearby buildings, vehicles,
             mBuildingColliders = new ColliderContainer[NUM_BUILDING_COLLIDERS];
             mVehicleColliders = new ColliderContainer[NUM_VEHICLE_COLLIDERS];
+            mParkedVehicleColliders = new ColliderContainer[NUM_PARKED_VEHICLE_COLLIDERS];
+
             for (int i =0; i<NUM_BUILDING_COLLIDERS; i++)
             {
                 //Initialize the building collider
@@ -94,10 +107,22 @@ namespace IOperateIt
                 vehicleCollider.boxCollider = vehicleCollider.colliderOwner.AddComponent<BoxCollider>();
                 vehicleCollider.boxCollider.enabled = true;
                 mVehicleColliders[i] = vehicleCollider;
+
+
             }
 
+            for( int i = 0; i<NUM_PARKED_VEHICLE_COLLIDERS; i++)
+            {
+                ColliderContainer parkedVehicleCollider = new ColliderContainer();
+                parkedVehicleCollider.colliderOwner = new GameObject("parkedVehicleCollider" + i);
+                parkedVehicleCollider.boxCollider = parkedVehicleCollider.colliderOwner.AddComponent<BoxCollider>();
+                parkedVehicleCollider.boxCollider.enabled = true;
+                mParkedVehicleColliders[i] = parkedVehicleCollider;
+            }
+            id.RawData = 123456789;
+
         }
-        
+
         void Update()
         {
             if (this.active && Input.GetKey(KeyCode.F2))
@@ -173,10 +198,11 @@ namespace IOperateIt
             this.vehicleRigidBody.angularDrag = 2.5f;
             this.vehicleRigidBody.freezeRotation = true;
             this.vehicleCollider = gameObject.AddComponent<BoxCollider>();
+            this.vehicleCollider.size = this.vehicleMesh.bounds.size + new Vector3(0,1.3f,0);
 
             Segment3 ray = new Segment3(position + new Vector3(0f, 1.5f, 0f), position + new Vector3(0f, -100f, 0f));
-            rayCastSuccess = manager.RayCast(ray, 0f, ItemClass.Service.Road, ItemClass.Service.PublicTransport, ItemClass.SubService.None, ItemClass.SubService.None, ItemClass.Layer.Default, ItemClass.Layer.None, NetNode.Flags.None, NetSegment.Flags.None, out hitPos[0], out nodeIndex, out segmentIndex);
-            rayCastSuccess = rayCastSuccess || manager.RayCast(ray, 0f, ItemClass.Service.Beautification, ItemClass.Service.Water, ItemClass.SubService.None, ItemClass.SubService.None, ItemClass.Layer.Default, ItemClass.Layer.None, NetNode.Flags.None, NetSegment.Flags.None, out hitPos[1], out nodeIndex, out segmentIndex);
+            rayCastSuccess = manager.RayCast(null, ray, 0f, ItemClass.Service.Road, ItemClass.Service.PublicTransport, ItemClass.SubService.None, ItemClass.SubService.None, ItemClass.Layer.Default, ItemClass.Layer.None, NetNode.Flags.None, NetSegment.Flags.None, out hitPos[0], out nodeIndex, out segmentIndex);
+            rayCastSuccess = rayCastSuccess || manager.RayCast(null, ray, 0f, ItemClass.Service.Beautification, ItemClass.Service.Water, ItemClass.SubService.None, ItemClass.SubService.None, ItemClass.Layer.Default, ItemClass.Layer.None, NetNode.Flags.None, NetSegment.Flags.None, out hitPos[1], out nodeIndex, out segmentIndex);
             terrainHeight = terrainManager.SampleDetailHeight(transform.position);
             terrainHeight = Mathf.Max(terrainHeight, Mathf.Max(hitPos[0].y, hitPos[1].y));
 
@@ -186,7 +212,25 @@ namespace IOperateIt
             }
             prevPosition = transform.position;
 
-            //calculateSlope();
+            audioEffects.Clear();
+            togglableAudioEffects.Clear();
+            foreach (VehicleInfo.Effect effect in vehicleInfo.m_effects)
+            {
+                SoundEffect soundEffect = effect.m_effect as SoundEffect;
+
+                if( soundEffect != null)
+                {
+                    if ((effect.m_vehicleFlagsRequired & (Vehicle.Flags.Emergency1 | Vehicle.Flags.Emergency2)) != Vehicle.Flags.None)
+                    {
+                        togglableAudioEffects.Add(soundEffect);
+                    }
+                    else
+                    {
+                        audioEffects.Add(soundEffect);
+                    }
+                }
+            
+            }
         }
 
         void OnCollisionEnter(Collision col)
@@ -209,9 +253,14 @@ namespace IOperateIt
             {
                 UnityEngine.Object.Destroy(mBuildingColliders[i].colliderOwner);
             }
+
             for( int i =0; i<NUM_VEHICLE_COLLIDERS; i++)
             {
                 UnityEngine.Object.Destroy(mVehicleColliders[i].colliderOwner);
+            }
+            for(int i = 0; i < NUM_PARKED_VEHICLE_COLLIDERS; i++)
+            {
+                UnityEngine.Object.Destroy(mParkedVehicleColliders[i].colliderOwner);
             }
             UnityEngine.Object.Destroy(gameObject);
         }
@@ -256,17 +305,29 @@ namespace IOperateIt
             }
         }
 
-        private void setCollider(ushort vehicleId, int colliderIndex)
+        private void setCollider(ushort vehicleId, int colliderIndex, bool isParked = false)
         {
             Vector3 vehiclePosition;
             Quaternion vehicleRotation;
-
-            Vehicle vehicle = vehicleManager.m_vehicles.m_buffer[vehicleId];
-            vehicle.GetSmoothPosition(vehicleId, out vehiclePosition, out vehicleRotation);
-            mVehicleColliders[colliderIndex].boxCollider.size = vehicle.Info.m_lodMesh.bounds.size;
-
-            mVehicleColliders[colliderIndex].colliderOwner.transform.position = vehiclePosition;
-            mVehicleColliders[colliderIndex].colliderOwner.transform.rotation = vehicleRotation;
+            if (isParked)
+            {
+                VehicleParked parkedVehicle = vehicleManager.m_parkedVehicles.m_buffer[vehicleId];
+                vehicleRotation = parkedVehicle.m_rotation;
+                vehiclePosition = parkedVehicle.m_position;
+                mParkedVehicleColliders[colliderIndex].boxCollider.size = parkedVehicle.Info.m_mesh.bounds.size + new Vector3(0, 2.6f, 0);
+                mParkedVehicleColliders[colliderIndex].colliderOwner.transform.position = vehiclePosition;
+                mParkedVehicleColliders[colliderIndex].colliderOwner.transform.rotation = vehicleRotation;
+            }
+            else
+            {
+                Vehicle vehicle = vehicleManager.m_vehicles.m_buffer[vehicleId];
+                vehicle.GetSmoothPosition(vehicleId, out vehiclePosition, out vehicleRotation);
+                // add an arbitary height to make collider work better
+                mVehicleColliders[colliderIndex].boxCollider.size = vehicle.Info.m_lodMesh.bounds.size + new Vector3( 0, 1.3f, 0 );
+                mVehicleColliders[colliderIndex].colliderOwner.transform.position = vehiclePosition;
+                mVehicleColliders[colliderIndex].colliderOwner.transform.rotation = vehicleRotation;
+            }
+            
         }
 
         private void updateVehicleColliders()
@@ -276,6 +337,7 @@ namespace IOperateIt
             int colliderCounter = 0;
 
             Vehicle vehicle;
+
             int index = gridZ * 540 + gridX;
             ushort vehicleId = vehicleManager.m_vehicleGrid[index];
             if( vehicleId != 0)
@@ -298,9 +360,33 @@ namespace IOperateIt
 
         }
 
-        private void updateRoadColliders()
+        private void updateParkedVehicleColliders()
         {
+            int gridX = Mathf.Clamp((int)((transform.position.x / 32.0) + 270.0), 0, 539);
+            int gridZ = Mathf.Clamp((int)((transform.position.z / 32.0) + 270.0), 0, 539);
+            int colliderCounter = 0;
 
+            VehicleParked parkedVehicle;
+
+            int index = gridZ * 540 + gridX;
+            ushort vehicleId = vehicleManager.m_parkedGrid[index];
+            if (vehicleId != 0)
+            {
+                setCollider(vehicleId, colliderCounter, isParked:true);
+                colliderCounter++;
+                parkedVehicle = vehicleManager.m_parkedVehicles.m_buffer[vehicleId];
+
+                while (parkedVehicle.m_nextGridParked != 0 && colliderCounter < NUM_PARKED_VEHICLE_COLLIDERS)
+                {
+                    setCollider(parkedVehicle.m_nextGridParked, colliderCounter,isParked:true);
+                    parkedVehicle = vehicleManager.m_parkedVehicles.m_buffer[parkedVehicle.m_nextGridParked];
+                    colliderCounter++;
+                }
+            }
+            for (int i = colliderCounter; i < NUM_PARKED_VEHICLE_COLLIDERS; i++)
+            {
+                mVehicleColliders[colliderCounter].boxCollider.transform.position = new Vector3(float.PositiveInfinity, float.PositiveInfinity);
+            }
         }
 
         private void calculateSlope()
@@ -311,7 +397,7 @@ namespace IOperateIt
             if (diffVector.sqrMagnitude > 0.05f)
             {
                 newRotation = Quaternion.LookRotation(diffVector);
-                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.Euler(newRotation.eulerAngles.x, oldEuler.y, 0), Time.deltaTime * 3.0f);
+                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.Euler(Math.Abs(newRotation.eulerAngles.x), oldEuler.y, 0), Time.deltaTime * 6.0f);
             }
             prevPosition = transform.position;
         }
@@ -329,12 +415,12 @@ namespace IOperateIt
 
                 updateBuildingColliders();
                 updateVehicleColliders();
-                updateRoadColliders();
+                updateParkedVehicleColliders();
 
                 Segment3 ray = new Segment3(transform.position + new Vector3(0f, 1.5f, 0f), transform.position + new Vector3(0f, -100f, 0f));
 
-                rayCastSuccess = netManager.RayCast(ray, 0f, ItemClass.Service.Road, ItemClass.Service.PublicTransport, ItemClass.SubService.None, ItemClass.SubService.None, ItemClass.Layer.Default, ItemClass.Layer.None, NetNode.Flags.None, NetSegment.Flags.None, out hitPos[0], out nodeIndex, out segmentIndex);
-                rayCastSuccess = rayCastSuccess || netManager.RayCast(ray, 0f, ItemClass.Service.Beautification, ItemClass.Service.Water, ItemClass.SubService.None, ItemClass.SubService.None, ItemClass.Layer.Default, ItemClass.Layer.None, NetNode.Flags.None, NetSegment.Flags.None, out hitPos[1], out nodeIndex, out segmentIndex);
+                rayCastSuccess = netManager.RayCast(null,ray, 0f, ItemClass.Service.Road, ItemClass.Service.PublicTransport, ItemClass.SubService.None, ItemClass.SubService.None, ItemClass.Layer.Default, ItemClass.Layer.None, NetNode.Flags.None, NetSegment.Flags.None, out hitPos[0], out nodeIndex, out segmentIndex);
+                rayCastSuccess = rayCastSuccess || netManager.RayCast(null,ray, 0f, ItemClass.Service.Beautification, ItemClass.Service.Water, ItemClass.SubService.None, ItemClass.SubService.None, ItemClass.Layer.Default, ItemClass.Layer.None, NetNode.Flags.None, NetSegment.Flags.None, out hitPos[1], out nodeIndex, out segmentIndex);
                 terrainHeight = terrainManager.SampleDetailHeight(transform.position);
                 terrainHeight = Mathf.Max(terrainHeight, Mathf.Max(hitPos[0].y, hitPos[1].y));
 
@@ -345,7 +431,7 @@ namespace IOperateIt
                 }
                 else
                 {
-                    this.vehicleRigidBody.AddRelativeForce(Physics.gravity*3f);
+                    this.vehicleRigidBody.AddRelativeForce(Physics.gravity*6f);
                 }
 
                 if (Input.GetKey(optionsManager.forwardKey))
@@ -382,7 +468,7 @@ namespace IOperateIt
                     this.vehicleRigidBody.AddForce(-brakeVelocity);
                 }
 
-                //calculateSlope();
+                calculateSlope();
 
                 Vector3 forward;
                 Vector3 up;
@@ -423,6 +509,11 @@ namespace IOperateIt
                 }
             }
 
+            foreach ( SoundEffect effect in audioEffects)
+            {
+                effect.PlaySound(id, listenerInfo, vehicleManager.m_audioGroup, transform.position, vehicleRigidBody.velocity, 100, 100, 1);
+
+            }
         }
     }
 }

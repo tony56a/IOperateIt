@@ -23,13 +23,13 @@ namespace IOperateIt.Manager
             this.timer.AutoReset = true;
             this.timer.Elapsed += (ElapsedEventHandler)((sender, e) => MaybeGenerateMission());
             this.timer.Interval = 60000.0;
-            this.timer.Start();
+            //this.timer.Start();
             LoggerUtils.Log("Mission Dispatch loaded");
         }
 
         public override void OnReleased()
         {
-            this.timer.Stop();
+            //this.timer.Stop();
             this.timer.Dispose();
         }
 
